@@ -1,0 +1,55 @@
+function [results_cx] = sim_cx(parameters,system_init,second)
+%% -- Perform treatment with platinum-based chemotherapy
+% INPUTS - parameters, 
+%        - current state of the system, 
+%        - if the CT is second-line treatment True/False
+% OUTPUT - results struct
+%% --
+    WBC_nadir = zeros(parameters.Cx_cycles,1);
+    WBC_time_to_nadir = zeros(parameters.Cx_cycles,1);
+    for i = 1 :parameters.Cx_cycles 
+        if i ==1
+            system = system_init;
+        else 
+            system = system_current;
+        end
+
+        weeks = 1;
+        while true
+            results=OVCA_sim_n_steps(param,system);
+            if i ==1 && weeks == 1
+                results.time = results.time + parameters.time_current;
+                results_cx = results;
+            else
+                results.time = results.time+results_cx.time(end);
+                results_cx = merge(results_cx,results);
+            end
+            
+            system_current = get_current_system(results);
+
+            if weeks == 3 % max three weeks between chemotherapy cycles
+                break
+            elseif results_cx.TotalCancerCells(end)>=param.M_relapse % chemotherapy is ineffective
+                break
+            end
+            weeks = weeks+1;
+            parameters.T_therapy_start=parameters.T_blood+param.T_therapy_start;
+        end          
+        
+        if second == false
+            if i ==1
+                [min_val, min_idx] = min(results_cx.WBC);
+                nadir(1) = min_val./param.wbc_scal;
+                T(1) = min_idx/2;
+            else
+                [min_val, min_idx] = min(results_cx.WBC(end-((weeks)*7*2):end)); %weeks*days*2 times per day
+                nadir(i) = min_val./param.wbc_scal;
+                T(i) = min_idx/2;
+            end
+        end
+    end
+    if second == false
+        results_cx.nadir = nadir;
+        results_cx.T = T;
+    end
+end
